@@ -49,6 +49,7 @@ class DataEncoder:
             grid_size = input_size / fm_size
             fm_w, fm_h = int(fm_size[0]), int(fm_size[1])
             xy = meshgrid(fm_w,fm_h) + 0.5  # [fm_h*fm_w, 2]
+            xy = xy.float()
             xy = (xy*grid_size).view(fm_h,fm_w,1,2).expand(fm_h,fm_w,9,2)
             wh = self.anchor_wh[i].view(1,1,9,2).expand(fm_h,fm_w,9,2)
             box = torch.cat([xy,wh], 3)  # [x,y,w,h]
@@ -110,16 +111,19 @@ class DataEncoder:
         input_size = torch.Tensor([input_size,input_size]) if isinstance(input_size, int) \
                      else torch.Tensor(input_size)
         anchor_boxes = self._get_anchor_boxes(input_size)
-
-        loc_xy = loc_preds[:,:2]
-        loc_wh = loc_preds[:,2:]
+        anchor_boxes=anchor_boxes.cuda()
+        loc_xy = loc_preds[:,:,:2]
+        loc_wh = loc_preds[:,:,2:]
 
         xy = loc_xy * anchor_boxes[:,2:] + anchor_boxes[:,:2]
         wh = loc_wh.exp() * anchor_boxes[:,2:]
-        boxes = torch.cat([xy-wh/2, xy+wh/2], 1)  # [#anchors,4]
-
-        score, labels = cls_preds.sigmoid().max(1)          # [#anchors,]
+        boxes = torch.cat([xy-wh/2, xy+wh/2], -1)  # [#anchors,4]
+        try:
+            score, labels = cls_preds.sigmoid().max(-1)
+        except:
+            score, labels = cls_preds.unsqueeze(1).sigmoid().max(-1)
+        # [#anchors,]
         ids = score > CLS_THRESH
-        ids = ids.nonzero().squeeze()             # [#obj,]
+        # ids = ids.nonzero()            # [#obj,]
         keep = box_nms(boxes[ids], score[ids], threshold=NMS_THRESH)
-        return boxes[ids][keep], labels[ids][keep]
+        return boxes[ids][keep], labels[ids][keep],score[ids][keep]

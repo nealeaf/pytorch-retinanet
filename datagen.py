@@ -35,31 +35,36 @@ class ListDataset(data.Dataset):
         self.input_size = input_size
 
         self.fnames = []
-        self.boxes = []
-        self.labels = []
 
         self.encoder = DataEncoder()
 
         with open(list_file) as f:
             lines = f.readlines()
-            self.num_samples = len(lines)
 
         for line in lines:
             splited = line.strip().split()
+            # delete empty label
+            flabel = splited[0].replace('images/', 'labels/').replace('.jpg', '.txt').replace('.png', '.txt').replace(
+                '.jpeg', '.txt')
+            if os.path.getsize(flabel) == 0:
+                print('empty label: ' + flabel)
+                continue
             self.fnames.append(splited[0])
-            num_boxes = (len(splited) - 1) // 5
-            box = []
-            label = []
-            for i in range(num_boxes):
-                xmin = splited[1+5*i]
-                ymin = splited[2+5*i]
-                xmax = splited[3+5*i]
-                ymax = splited[4+5*i]
-                c = splited[5+5*i]
-                box.append([float(xmin),float(ymin),float(xmax),float(ymax)])
-                label.append(int(c))
-            self.boxes.append(torch.Tensor(box))
-            self.labels.append(torch.LongTensor(label))
+        self.num_samples = len(self.fnames)
+            # num_boxes = (len(splited) - 1) // 5
+            # box = []
+            # label = []
+            # print(line, num_boxes)
+            # for i in range(num_boxes):
+            #     xmin = splited[1+5*i]
+            #     ymin = splited[2+5*i]
+            #     xmax = splited[3+5*i]
+            #     ymax = splited[4+5*i]
+            #     c = splited[5+5*i]
+            #     box.append([float(xmin),float(ymin),float(xmax),float(ymax)])
+            #     label.append(int(c))
+            # self.boxes.append(torch.Tensor(box))
+            # self.labels.append(torch.LongTensor(label))
 
     def __getitem__(self, idx):
         '''Load image.
@@ -77,9 +82,25 @@ class ListDataset(data.Dataset):
         img = Image.open(os.path.join(self.root, fname))
         if img.mode != 'RGB':
             img = img.convert('RGB')
+        width, height = img.size
 
-        boxes = self.boxes[idx].clone()
-        labels = self.labels[idx]
+        flabel = fname.replace('images/', 'labels/').replace('.jpg', '.txt').replace('.png', '.txt').replace(
+            '.jpeg', '.txt')
+        box = []
+        label = []
+        with open(flabel) as f:
+            lines = f.readlines()
+            for line in lines:
+                ls = line.strip().split()
+                x = float(ls[1]) * width
+                y = float(ls[2]) * height
+                w = float(ls[3]) * width
+                h = float(ls[4]) * height
+                box.append([x - w / 2, y - h / 2, x + w / 2, y + h / 2])
+                label.append(int(ls[0]))
+
+        boxes = torch.Tensor(box)
+        labels = torch.LongTensor(label)
         size = self.input_size
 
         # Data augmentation.

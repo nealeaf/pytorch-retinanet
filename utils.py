@@ -171,7 +171,11 @@ def box_nms(bboxes, scores, threshold=0.5, mode='union'):
 
     keep = []
     while order.numel() > 0:
-        i = order[0]
+        try:
+            i = order[0]
+        except:
+            order=order.unsqueeze(0)
+            i=order[0]
         keep.append(i)
 
         if order.numel() == 1:
@@ -239,7 +243,8 @@ def msr_init(net):
         elif type(layer) == nn.Linear:
             layer.bias.data.zero_()
 
-_, term_width = os.popen('stty size', 'r').read().split()
+# _, term_width = os.popen('stty size', 'r').read().split()
+_, term_width = os.get_terminal_size()
 term_width = int(term_width)
 TOTAL_BAR_LENGTH = 86.
 last_time = time.time()

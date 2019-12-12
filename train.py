@@ -35,17 +35,17 @@ transform = transforms.Compose([
     transforms.Normalize((0.485,0.456,0.406), (0.229,0.224,0.225))
 ])
 
-trainset = ListDataset(root='/search/odin/liukuang/data/voc_all_images',
-                       list_file='./data/voc12_train.txt', train=True, transform=transform, input_size=600)
-trainloader = torch.utils.data.DataLoader(trainset, batch_size=16, shuffle=True, num_workers=8, collate_fn=trainset.collate_fn)
+trainset = ListDataset(root='',
+                       list_file='/media/code/u_zhh/test/darknet/data/head/train.txt', train=True, transform=transform, input_size=600)
+trainloader = torch.utils.data.DataLoader(trainset, batch_size=16, shuffle=True, num_workers=16, collate_fn=trainset.collate_fn)
 
-testset = ListDataset(root='/search/odin/liukuang/data/voc_all_images',
-                      list_file='./data/voc12_val.txt', train=False, transform=transform, input_size=600)
-testloader = torch.utils.data.DataLoader(testset, batch_size=16, shuffle=False, num_workers=8, collate_fn=testset.collate_fn)
+testset = ListDataset(root='',
+                      list_file='/media/code/u_zhh/test/darknet/data/head/val.txt', train=False, transform=transform, input_size=600)
+testloader = torch.utils.data.DataLoader(testset, batch_size=16, shuffle=False, num_workers=16, collate_fn=testset.collate_fn)
 
 # Model
 net = RetinaNet()
-net.load_state_dict(torch.load('./model/net.pth'))
+net.load_state_dict(torch.load('./models/net.pth'))
 if args.resume:
     print('==> Resuming from checkpoint..')
     checkpoint = torch.load('./checkpoint/ckpt.pth')
@@ -76,8 +76,8 @@ def train(epoch):
         loss.backward()
         optimizer.step()
 
-        train_loss += loss.data[0]
-        print('train_loss: %.3f | avg_loss: %.3f' % (loss.data[0], train_loss/(batch_idx+1)))
+        train_loss += loss.data
+        print('train_loss: %.3f | avg_loss: %.3f' % (loss.data, train_loss/(batch_idx+1)))
 
 # Test
 def test(epoch):
@@ -91,8 +91,8 @@ def test(epoch):
 
         loc_preds, cls_preds = net(inputs)
         loss = criterion(loc_preds, loc_targets, cls_preds, cls_targets)
-        test_loss += loss.data[0]
-        print('test_loss: %.3f | avg_loss: %.3f' % (loss.data[0], test_loss/(batch_idx+1)))
+        test_loss += loss.data
+        print('test_loss: %.3f | avg_loss: %.3f' % (loss.data, test_loss/(batch_idx+1)))
 
     # Save checkpoint
     global best_loss
@@ -110,6 +110,6 @@ def test(epoch):
         best_loss = test_loss
 
 
-for epoch in range(start_epoch, start_epoch+200):
+for epoch in range(start_epoch, start_epoch+2000):
     train(epoch)
     test(epoch)
