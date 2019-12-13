@@ -7,12 +7,17 @@ import torch.nn.functional as F
 from utils import one_hot_embedding
 from torch.autograd import Variable
 
+import visdom
+
 
 class FocalLoss(nn.Module):
     def __init__(self, num_classes=1):
         super(FocalLoss, self).__init__()
         self.num_classes = num_classes
         self.eps = 1e-7
+        self.vis = visdom.Visdom(env='retinanet')
+        self.count = 0
+        self.vis.line([[0., 0.]], [self.count], win='detail', opts=dict(title='loc&cls loss', legend=['loc', 'cls']))
 
     def focal_loss(self, x, y):
         '''Focal loss.
@@ -57,8 +62,7 @@ class FocalLoss(nn.Module):
         pt = (2*xt+1).sigmoid()
 
         w = alpha*t + (1-alpha)*(1-t)
-        logit = pt.clamp(self.eps, 1. - self.eps)
-        loss = -w * logit.log() / 2
+        loss = -w*pt.log() / 2
         return loss.sum()
 
     def forward(self, loc_preds, loc_targets, cls_preds, cls_targets):
@@ -89,11 +93,13 @@ class FocalLoss(nn.Module):
         # cls_loss = FocalLoss(loc_preds, loc_targets)
         ################################################################
         pos_neg = cls_targets > -1  # exclude ignored anchors
-        num_peg = pos_neg.data.long().sum()
         mask = pos_neg.unsqueeze(2).expand_as(cls_preds)
         masked_cls_preds = cls_preds[mask].view(-1,self.num_classes)
         cls_loss = self.focal_loss_alt(masked_cls_preds, cls_targets[pos_neg])
 
-        print('loc_loss: %.3f | cls_loss: %.3f' % (loc_loss.data/num_pos, cls_loss.data/pos_neg), end=' | ')
-        loss = loc_loss/num_pos + cls_loss/num_peg
+        print('loc_loss: %.3f | cls_loss: %.3f' % (loc_loss.data/num_pos, cls_loss.data/num_pos), end=' | ')
+        loss = (loc_loss+cls_loss)/num_pos
+
+        self.vis.line([[(loc_loss.data/num_pos).cpu().numpy(), (cls_loss.data/num_pos).cpu().numpy()]], [self.count], win='detail', update='append')
+        self.count += 1
         return loss

@@ -18,6 +18,8 @@ from datagen import ListDataset
 
 from torch.autograd import Variable
 
+import visdom
+
 
 parser = argparse.ArgumentParser(description='PyTorch RetinaNet Training')
 parser.add_argument('--lr', default=1e-3, type=float, help='learning rate')
@@ -65,6 +67,7 @@ def train(epoch):
     net.train()
     net.module.freeze_bn()
     train_loss = 0
+    count = 1
     for batch_idx, (inputs, loc_targets, cls_targets) in enumerate(trainloader):
         inputs = Variable(inputs.cuda())
         loc_targets = Variable(loc_targets.cuda())
@@ -77,13 +80,16 @@ def train(epoch):
         optimizer.step()
 
         train_loss += loss.data
+        count += 1
         print('train_loss: %.3f | avg_loss: %.3f' % (loss.data, train_loss/(batch_idx+1)))
+    return train_loss/count
 
 # Test
 def test(epoch):
     print('\nTest')
     net.eval()
     test_loss = 0
+    count = 1
     for batch_idx, (inputs, loc_targets, cls_targets) in enumerate(testloader):
         inputs = Variable(inputs.cuda(), volatile=True)
         loc_targets = Variable(loc_targets.cuda())
@@ -92,7 +98,9 @@ def test(epoch):
         loc_preds, cls_preds = net(inputs)
         loss = criterion(loc_preds, loc_targets, cls_preds, cls_targets)
         test_loss += loss.data
+        count += 1
         print('test_loss: %.3f | avg_loss: %.3f' % (loss.data, test_loss/(batch_idx+1)))
+    return test_loss/count
 
     # Save checkpoint
     global best_loss
@@ -110,6 +118,11 @@ def test(epoch):
         best_loss = test_loss
 
 
+vis = visdom.Visdom(env='retinanet')
+vis.line([[0., 0.]], [0], win='total', opts=dict(title='total loss', legend=['train', 'test']))
+
 for epoch in range(start_epoch, start_epoch+2000):
-    train(epoch)
-    test(epoch)
+    train_loss = train(epoch)
+    test_loss = test(epoch)
+
+    vis.line([[train_loss.cpu().numpy(), test_loss.cpu().numpy()]], [epoch], win='total', update='append')
